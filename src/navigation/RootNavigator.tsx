@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 
 import AccountsScreen from '../screens/AccountsScreen';
 import AnchorsScreen from '../screens/AnchorsScreen';
+import CategoriesScreen from '../screens/CategoriesScreen';
 import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
@@ -11,6 +12,7 @@ export type RootTabParamList = {
   Home: undefined;
   Contas: undefined;
   Transacoes: undefined;
+  Categorias: undefined;
   Ancoras: undefined;
   Configuracoes: undefined;
 };
@@ -27,6 +29,11 @@ export default function RootNavigator() {
           name="Transacoes"
           component={TransactionsScreen}
           options={{ title: 'Transações' }}
+        />
+        <Tab.Screen
+          name="Categorias"
+          component={CategoriesScreen}
+          options={{ title: 'Categorias' }}
         />
         <Tab.Screen name="Ancoras" component={AnchorsScreen} options={{ title: 'Âncoras' }} />
         <Tab.Screen
