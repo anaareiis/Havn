@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 
+import AccountsScreen from '../screens/AccountsScreen';
 import AnchorsScreen from '../screens/AnchorsScreen';
 import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -8,6 +9,7 @@ import TransactionsScreen from '../screens/TransactionsScreen';
 
 export type RootTabParamList = {
   Home: undefined;
+  Contas: undefined;
   Transacoes: undefined;
   Ancoras: undefined;
   Configuracoes: undefined;
@@ -20,6 +22,7 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Tab.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
         <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
+        <Tab.Screen name="Contas" component={AccountsScreen} options={{ title: 'Contas' }} />
         <Tab.Screen
           name="Transacoes"
           component={TransactionsScreen}

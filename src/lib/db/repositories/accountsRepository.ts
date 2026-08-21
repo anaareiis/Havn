@@ -89,3 +89,31 @@ export async function removeAccount(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM accounts WHERE id = ?', id);
 }
+
+export async function getAccountBalance(id: string): Promise<number> {
+  const db = await getDatabase();
+  const account = await findAccountById(id);
+  if (!account) return 0;
+
+  const result = await db.getFirstAsync<{ total: number | null }>(
+    `SELECT SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END) as total
+     FROM transactions WHERE account_id = ?`,
+    id,
+  );
+
+  return account.balance + (result?.total ?? 0);
+}
+
+export interface AccountWithBalance extends Account {
+  currentBalance: number;
+}
+
+export async function findAllAccountsWithBalance(): Promise<AccountWithBalance[]> {
+  const accounts = await findAllAccounts();
+  return Promise.all(
+    accounts.map(async (account) => ({
+      ...account,
+      currentBalance: await getAccountBalance(account.id),
+    })),
+  );
+}
