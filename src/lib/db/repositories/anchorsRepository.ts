@@ -136,6 +136,25 @@ export async function removeAnchor(id: string): Promise<void> {
   await db.runAsync('DELETE FROM anchors WHERE id = ?', id);
 }
 
+export function monthlyEquivalent(amount: number, frequency: AnchorFrequency): number {
+  switch (frequency) {
+    case 'weekly':
+      return (amount * 52) / 12;
+    case 'yearly':
+      return amount / 12;
+    case 'monthly':
+    default:
+      return amount;
+  }
+}
+
+export async function getMonthlyCommittedTotal(): Promise<number> {
+  const anchors = await findAllAnchors();
+  return anchors
+    .filter((anchor) => anchor.active)
+    .reduce((total, anchor) => total + monthlyEquivalent(anchor.amount, anchor.frequency), 0);
+}
+
 const MAX_CATCH_UP_OCCURRENCES = 24;
 
 export async function processDueAnchors(): Promise<number> {

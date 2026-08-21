@@ -12,6 +12,7 @@ import {
   findAllAccounts,
   findAllAnchors,
   findAllCategories,
+  monthlyEquivalent,
   removeAnchor,
   updateAnchor,
 } from '../lib/db';
@@ -163,6 +164,9 @@ export default function AnchorsScreen() {
   }
 
   const canCreate = accounts.length > 0 && categories.length > 0;
+  const monthlyCommittedTotal = anchors
+    .filter((anchor) => anchor.active)
+    .reduce((total, anchor) => total + monthlyEquivalent(anchor.amount, anchor.frequency), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -172,12 +176,35 @@ export default function AnchorsScreen() {
         contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.md }}
         ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
         ListHeaderComponent={
-          <Button
-            label="Nova âncora"
-            variant="primary"
-            disabled={!canCreate}
-            onPress={openCreateModal}
-          />
+          <View style={{ gap: theme.spacing.md }}>
+            <Card style={{ gap: theme.spacing.xs }}>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.fontFamily.rounded.semibold,
+                  fontSize: theme.fontSize.sm,
+                }}
+              >
+                Total mensal em Âncoras ativas
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.fontFamily.tabular.bold,
+                  fontSize: theme.fontSize.xl,
+                }}
+              >
+                {formatCurrency(monthlyCommittedTotal)}
+              </Text>
+            </Card>
+
+            <Button
+              label="Nova âncora"
+              variant="primary"
+              disabled={!canCreate}
+              onPress={openCreateModal}
+            />
+          </View>
         }
         ListHeaderComponentStyle={{ marginBottom: theme.spacing.md }}
         ListEmptyComponent={
