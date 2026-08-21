@@ -12,6 +12,7 @@ import {
   removeAccount,
   updateAccount,
 } from '../lib/db';
+import { formatCurrency } from '../lib/format';
 import { useTheme } from '../theme';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -23,10 +24,6 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 
 function accountTypeLabel(type: AccountType): string {
   return ACCOUNT_TYPES.find((option) => option.value === type)?.label ?? type;
-}
-
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 export default function AccountsScreen() {
