@@ -177,3 +177,47 @@ export async function removeTransaction(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
 }
+
+export interface PeriodTotals {
+  totalIncome: number;
+  totalExpense: number;
+}
+
+export async function getTotalsByPeriod(startDate: string, endDate: string): Promise<PeriodTotals> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ income: number | null; expense: number | null }>(
+    `SELECT
+       SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+       SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+     FROM transactions
+     WHERE date >= ? AND date <= ?`,
+    [startDate, endDate],
+  );
+
+  return {
+    totalIncome: row?.income ?? 0,
+    totalExpense: row?.expense ?? 0,
+  };
+}
+
+export interface CategoryTotal {
+  categoryId: string;
+  total: number;
+}
+
+export async function getExpensesByCategory(
+  startDate: string,
+  endDate: string,
+): Promise<CategoryTotal[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ category_id: string; total: number }>(
+    `SELECT category_id, SUM(amount) as total
+     FROM transactions
+     WHERE type = 'expense' AND date >= ? AND date <= ? AND category_id IS NOT NULL
+     GROUP BY category_id
+     ORDER BY total DESC`,
+    [startDate, endDate],
+  );
+
+  return rows.map((row) => ({ categoryId: row.category_id, total: row.total }));
+}

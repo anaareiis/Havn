@@ -27,3 +27,23 @@ export function parseDateInput(value: string): string | null {
 
   return isValid ? `${year}-${month}-${day}` : null;
 }
+
+export interface DateRange {
+  start: string;
+  end: string;
+}
+
+export function monthRange(date: Date): DateRange {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+}
+
+export function previousMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+}
+
+export function monthLabel(date: Date): string {
+  const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
