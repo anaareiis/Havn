@@ -42,4 +42,28 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     `,
   },
+  {
+    version: 2,
+    up: `
+      CREATE TABLE IF NOT EXISTS anchors (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        category_id TEXT REFERENCES categories(id),
+        account_id TEXT NOT NULL REFERENCES accounts(id),
+        frequency TEXT NOT NULL,
+        next_due_date TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_anchors_next_due_date ON anchors(next_due_date);
+
+      ALTER TABLE transactions ADD COLUMN anchor_id TEXT REFERENCES anchors(id);
+
+      CREATE INDEX IF NOT EXISTS idx_transactions_anchor_id ON transactions(anchor_id);
+    `,
+  },
 ];

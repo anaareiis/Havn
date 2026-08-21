@@ -6,6 +6,7 @@ interface TransactionRow {
   id: string;
   account_id: string;
   category_id: string | null;
+  anchor_id: string | null;
   amount: number;
   type: TransactionType;
   description: string | null;
@@ -19,6 +20,7 @@ function mapRow(row: TransactionRow): Transaction {
     id: row.id,
     accountId: row.account_id,
     categoryId: row.category_id,
+    anchorId: row.anchor_id,
     amount: row.amount,
     type: row.type,
     description: row.description,
@@ -31,6 +33,7 @@ function mapRow(row: TransactionRow): Transaction {
 export interface CreateTransactionInput {
   accountId: string;
   categoryId?: string | null;
+  anchorId?: string | null;
   amount: number;
   type: TransactionType;
   description?: string | null;
@@ -44,6 +47,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     id: generateId(),
     accountId: input.accountId,
     categoryId: input.categoryId ?? null,
+    anchorId: input.anchorId ?? null,
     amount: input.amount,
     type: input.type,
     description: input.description ?? null,
@@ -53,11 +57,12 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   };
 
   await db.runAsync(
-    `INSERT INTO transactions (id, account_id, category_id, amount, type, description, date, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO transactions (id, account_id, category_id, anchor_id, amount, type, description, date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     transaction.id,
     transaction.accountId,
     transaction.categoryId,
+    transaction.anchorId,
     transaction.amount,
     transaction.type,
     transaction.description,
@@ -149,7 +154,10 @@ export async function findTransactionById(id: string): Promise<Transaction | nul
 export async function updateTransaction(
   id: string,
   input: Partial<
-    Pick<Transaction, 'accountId' | 'categoryId' | 'amount' | 'type' | 'description' | 'date'>
+    Pick<
+      Transaction,
+      'accountId' | 'categoryId' | 'anchorId' | 'amount' | 'type' | 'description' | 'date'
+    >
   >,
 ): Promise<void> {
   const db = await getDatabase();
@@ -160,10 +168,11 @@ export async function updateTransaction(
 
   await db.runAsync(
     `UPDATE transactions
-     SET account_id = ?, category_id = ?, amount = ?, type = ?, description = ?, date = ?, updated_at = ?
+     SET account_id = ?, category_id = ?, anchor_id = ?, amount = ?, type = ?, description = ?, date = ?, updated_at = ?
      WHERE id = ?`,
     updated.accountId,
     updated.categoryId,
+    updated.anchorId,
     updated.amount,
     updated.type,
     updated.description,

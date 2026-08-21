@@ -26,10 +26,27 @@ export interface Transaction {
   id: string;
   accountId: string;
   categoryId: string | null;
+  anchorId: string | null;
   amount: number;
   type: TransactionType;
   description: string | null;
   date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AnchorFrequency = 'weekly' | 'monthly' | 'yearly';
+
+export interface Anchor {
+  id: string;
+  name: string;
+  amount: number;
+  type: TransactionType;
+  categoryId: string | null;
+  accountId: string;
+  frequency: AnchorFrequency;
+  nextDueDate: string;
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }
