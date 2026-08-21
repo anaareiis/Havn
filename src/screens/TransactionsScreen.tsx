@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, FlatList, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Button, Card, Input } from '../components';
 import {
@@ -10,12 +10,15 @@ import {
   createTransaction,
   findAllAccounts,
   findAllCategories,
-  findAllTransactions,
+  findTransactions,
   removeTransaction,
   updateTransaction,
 } from '../lib/db';
+import { formatDateForInput, parseDateInput, todayIso } from '../lib/date';
 import { formatCurrency } from '../lib/format';
 import { useTheme } from '../theme';
+
+const PAGE_SIZE = 20;
 
 interface FormErrors {
   amount?: string;
@@ -24,38 +27,23 @@ interface FormErrors {
   date?: string;
 }
 
-function todayIso(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDateForInput(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-');
-  return `${day}/${month}/${year}`;
-}
-
-function parseDateInput(value: string): string | null {
-  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return null;
-
-  const [, day, month, year] = match;
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  const isValid =
-    date.getFullYear() === Number(year) &&
-    date.getMonth() === Number(month) - 1 &&
-    date.getDate() === Number(day);
-
-  return isValid ? `${year}-${month}-${day}` : null;
-}
-
 export default function TransactionsScreen() {
   const theme = useTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
+  const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
+  const [startDateText, setStartDateText] = useState('');
+  const [endDateText, setEndDateText] = useState('');
+
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -66,22 +54,69 @@ export default function TransactionsScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const loadData = useCallback(async () => {
-    const [transactionList, accountList, categoryList] = await Promise.all([
-      findAllTransactions(),
-      findAllAccounts(),
-      findAllCategories(),
-    ]);
-    setTransactions(transactionList);
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  const loadStaticData = useCallback(async () => {
+    const [accountList, categoryList] = await Promise.all([findAllAccounts(), findAllCategories()]);
     setAccounts(accountList);
     setCategories(categoryList);
   }, []);
 
+  const fetchPage = useCallback(
+    async (reset: boolean) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      if (!reset) setLoadingMore(true);
+
+      if (reset) offsetRef.current = 0;
+
+      const startDate = startDateText ? parseDateInput(startDateText) : null;
+      const endDate = endDateText ? parseDateInput(endDateText) : null;
+
+      const results = await findTransactions({
+        search: search.trim() || undefined,
+        accountId: filterAccountId,
+        categoryId: filterCategoryId,
+        startDate,
+        endDate,
+        limit: PAGE_SIZE,
+        offset: offsetRef.current,
+      });
+
+      setTransactions((prev) => (reset ? results : [...prev, ...results]));
+      setHasMore(results.length === PAGE_SIZE);
+      offsetRef.current += results.length;
+
+      isFetchingRef.current = false;
+      setLoadingMore(false);
+    },
+    [search, filterAccountId, filterCategoryId, startDateText, endDateText],
+  );
+
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData]),
+      loadStaticData();
+      fetchPage(true);
+    }, [loadStaticData, fetchPage]),
   );
+
+  function handleLoadMore() {
+    if (hasMore && !isFetchingRef.current) {
+      fetchPage(false);
+    }
+  }
+
+  function clearFilters() {
+    setSearchInput('');
+    setSearch('');
+    setFilterAccountId(null);
+    setFilterCategoryId(null);
+    setStartDateText('');
+    setEndDateText('');
+  }
 
   function accountName(id: string): string {
     return accounts.find((account) => account.id === id)?.name ?? 'Conta removida';
@@ -152,7 +187,7 @@ export default function TransactionsScreen() {
     }
 
     setModalVisible(false);
-    await loadData();
+    await fetchPage(true);
   }
 
   function handleDelete(transaction: Transaction) {
@@ -163,13 +198,15 @@ export default function TransactionsScreen() {
         style: 'destructive',
         onPress: async () => {
           await removeTransaction(transaction.id);
-          await loadData();
+          await fetchPage(true);
         },
       },
     ]);
   }
 
   const hasAccounts = accounts.length > 0;
+  const hasActiveFilters =
+    search || filterAccountId || filterCategoryId || startDateText || endDateText;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -178,15 +215,88 @@ export default function TransactionsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.md }}
         ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
         ListHeaderComponent={
-          <Button
-            label="Nova transação"
-            variant="primary"
-            disabled={!hasAccounts}
-            onPress={openCreateModal}
-          />
+          <View style={{ gap: theme.spacing.md, marginBottom: theme.spacing.md }}>
+            <Button
+              label="Nova transação"
+              variant="primary"
+              disabled={!hasAccounts}
+              onPress={openCreateModal}
+            />
+
+            <Input
+              label="Buscar"
+              placeholder="Buscar por descrição"
+              value={searchInput}
+              onChangeText={setSearchInput}
+            />
+
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="De"
+                  placeholder="dd/mm/aaaa"
+                  value={startDateText}
+                  onChangeText={setStartDateText}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Até"
+                  placeholder="dd/mm/aaaa"
+                  value={endDateText}
+                  onChangeText={setEndDateText}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              <Button
+                label="Todas as contas"
+                variant={filterAccountId === null ? 'primary' : 'outline'}
+                onPress={() => setFilterAccountId(null)}
+              />
+              {accounts.map((account) => (
+                <Button
+                  key={account.id}
+                  label={account.name}
+                  variant={filterAccountId === account.id ? 'primary' : 'outline'}
+                  onPress={() => setFilterAccountId(account.id)}
+                />
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              <Button
+                label="Todas as categorias"
+                variant={filterCategoryId === null ? 'primary' : 'outline'}
+                onPress={() => setFilterCategoryId(null)}
+              />
+              {categories.map((category) => (
+                <Button
+                  key={category.id}
+                  label={`${category.icon ?? ''} ${category.name}`.trim()}
+                  variant={filterCategoryId === category.id ? 'primary' : 'outline'}
+                  onPress={() => setFilterCategoryId(category.id)}
+                />
+              ))}
+            </View>
+
+            {hasActiveFilters ? (
+              <Button label="Limpar filtros" variant="outline" onPress={clearFilters} />
+            ) : null}
+          </View>
         }
-        ListHeaderComponentStyle={{ marginBottom: theme.spacing.md }}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator
+              color={theme.colors.primary}
+              style={{ marginTop: theme.spacing.md }}
+            />
+          ) : null
+        }
         ListEmptyComponent={
           <Text
             style={{
@@ -196,9 +306,11 @@ export default function TransactionsScreen() {
               textAlign: 'center',
             }}
           >
-            {hasAccounts
-              ? 'Nenhuma transação cadastrada.'
-              : 'Cadastre uma conta antes de criar transações.'}
+            {!hasAccounts
+              ? 'Cadastre uma conta antes de criar transações.'
+              : hasActiveFilters
+                ? 'Nenhuma transação encontrada para os filtros aplicados.'
+                : 'Nenhuma transação cadastrada.'}
           </Text>
         }
         renderItem={({ item }) => {

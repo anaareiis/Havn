@@ -86,6 +86,60 @@ export async function findTransactionsByAccountId(accountId: string): Promise<Tr
   return rows.map(mapRow);
 }
 
+export interface TransactionFilters {
+  search?: string;
+  accountId?: string | null;
+  categoryId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export interface TransactionQueryOptions extends TransactionFilters {
+  limit?: number;
+  offset?: number;
+}
+
+export async function findTransactions(
+  options: TransactionQueryOptions = {},
+): Promise<Transaction[]> {
+  const db = await getDatabase();
+
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (options.accountId) {
+    conditions.push('account_id = ?');
+    params.push(options.accountId);
+  }
+  if (options.categoryId) {
+    conditions.push('category_id = ?');
+    params.push(options.categoryId);
+  }
+  if (options.startDate) {
+    conditions.push('date >= ?');
+    params.push(options.startDate);
+  }
+  if (options.endDate) {
+    conditions.push('date <= ?');
+    params.push(options.endDate);
+  }
+  if (options.search) {
+    conditions.push('description LIKE ?');
+    params.push(`%${options.search}%`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = options.limit ?? 20;
+  const offset = options.offset ?? 0;
+
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset],
+  );
+
+  return rows.map(mapRow);
+}
+
 export async function findTransactionById(id: string): Promise<Transaction | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<TransactionRow>('SELECT * FROM transactions WHERE id = ?', id);
