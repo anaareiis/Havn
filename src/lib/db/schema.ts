@@ -66,4 +66,13 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_transactions_anchor_id ON transactions(anchor_id);
     `,
   },
+  {
+    version: 3,
+    up: `
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+    `,
+  },
 ];
