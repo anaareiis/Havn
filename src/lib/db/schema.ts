@@ -75,4 +75,22 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    up: `
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id TEXT PRIMARY KEY NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        payload TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        synced_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+    `,
+  },
 ];

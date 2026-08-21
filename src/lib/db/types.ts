@@ -50,3 +50,19 @@ export interface Anchor {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SyncEntityType = 'account' | 'category' | 'transaction' | 'anchor';
+export type SyncOperation = 'create' | 'update' | 'delete';
+export type SyncStatus = 'pending' | 'synced' | 'error';
+
+export interface SyncQueueEntry {
+  id: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  operation: SyncOperation;
+  payload: string | null;
+  status: SyncStatus;
+  errorMessage: string | null;
+  createdAt: string;
+  syncedAt: string | null;
+}
