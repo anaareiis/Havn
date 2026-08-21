@@ -47,3 +47,20 @@ export function monthLabel(date: Date): string {
   const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
+
+export type RecurrenceFrequency = 'weekly' | 'monthly' | 'yearly';
+
+export function advanceDate(isoDate: string, frequency: RecurrenceFrequency): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (frequency === 'weekly') {
+    date.setDate(date.getDate() + 7);
+  } else if (frequency === 'monthly') {
+    date.setMonth(date.getMonth() + 1);
+  } else {
+    date.setFullYear(date.getFullYear() + 1);
+  }
+
+  return toIsoDate(date);
+}

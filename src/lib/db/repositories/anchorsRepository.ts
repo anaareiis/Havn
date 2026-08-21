@@ -1,6 +1,8 @@
+import { advanceDate, todayIso } from '../../date';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Anchor, AnchorFrequency, TransactionType } from '../types';
+import { createTransaction } from './transactionsRepository';
 
 interface AnchorRow {
   id: string;
@@ -132,4 +134,41 @@ export async function updateAnchor(
 export async function removeAnchor(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM anchors WHERE id = ?', id);
+}
+
+const MAX_CATCH_UP_OCCURRENCES = 24;
+
+export async function processDueAnchors(): Promise<number> {
+  const today = todayIso();
+  const anchors = await findAllAnchors();
+  let generatedCount = 0;
+
+  for (const anchor of anchors) {
+    if (!anchor.active) continue;
+
+    let nextDueDate = anchor.nextDueDate;
+    let occurrences = 0;
+
+    while (nextDueDate <= today && occurrences < MAX_CATCH_UP_OCCURRENCES) {
+      await createTransaction({
+        accountId: anchor.accountId,
+        categoryId: anchor.categoryId,
+        anchorId: anchor.id,
+        amount: anchor.amount,
+        type: anchor.type,
+        description: anchor.name,
+        date: nextDueDate,
+      });
+
+      nextDueDate = advanceDate(nextDueDate, anchor.frequency);
+      generatedCount += 1;
+      occurrences += 1;
+    }
+
+    if (nextDueDate !== anchor.nextDueDate) {
+      await updateAnchor(anchor.id, { nextDueDate });
+    }
+  }
+
+  return generatedCount;
 }
