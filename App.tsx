@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState } from 'react-native';
 
+import { ensureSession } from './src/lib/auth';
 import { processDueAnchors } from './src/lib/db';
 import { getAnchorNoticeDays, scheduleAnchorNotifications } from './src/lib/notifications';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -24,6 +25,12 @@ export default function App() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    ensureSession().catch((error) => {
+      console.warn('Failed to establish a Supabase session', error);
+    });
+  }, []);
 
   useEffect(() => {
     syncAnchors();
