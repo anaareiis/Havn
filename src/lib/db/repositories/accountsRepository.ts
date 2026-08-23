@@ -1,3 +1,4 @@
+import { logConflict } from '../../conflictLog';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Account, AccountType } from '../types';
@@ -113,21 +114,49 @@ export async function removeAccount(id: string): Promise<void> {
 
 export async function upsertAccountFromRemote(account: Account): Promise<void> {
   const db = await getDatabase();
+  const current = await findAccountById(account.id);
+
+  if (!current) {
+    await db.runAsync(
+      'INSERT INTO accounts (id, name, type, balance, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      account.id,
+      account.name,
+      account.type,
+      account.balance,
+      account.createdAt,
+      account.updatedAt,
+    );
+    return;
+  }
+
+  if (current.updatedAt === account.updatedAt) return;
+
+  if (current.updatedAt > account.updatedAt) {
+    logConflict({
+      entityType: 'account',
+      entityId: account.id,
+      resolution: 'kept-local',
+      localUpdatedAt: current.updatedAt,
+      remoteUpdatedAt: account.updatedAt,
+    });
+    return;
+  }
+
+  logConflict({
+    entityType: 'account',
+    entityId: account.id,
+    resolution: 'applied-remote',
+    localUpdatedAt: current.updatedAt,
+    remoteUpdatedAt: account.updatedAt,
+  });
+
   await db.runAsync(
-    `INSERT INTO accounts (id, name, type, balance, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       name = excluded.name,
-       type = excluded.type,
-       balance = excluded.balance,
-       updated_at = excluded.updated_at
-     WHERE excluded.updated_at > accounts.updated_at`,
-    account.id,
+    'UPDATE accounts SET name = ?, type = ?, balance = ?, updated_at = ? WHERE id = ?',
     account.name,
     account.type,
     account.balance,
-    account.createdAt,
     account.updatedAt,
+    account.id,
   );
 }
 

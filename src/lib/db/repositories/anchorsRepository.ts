@@ -1,3 +1,4 @@
+import { logConflict } from '../../conflictLog';
 import { advanceDate, todayIso } from '../../date';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
@@ -159,21 +160,52 @@ export async function removeAnchor(id: string): Promise<void> {
 
 export async function upsertAnchorFromRemote(anchor: Anchor): Promise<void> {
   const db = await getDatabase();
+  const current = await findAnchorById(anchor.id);
+
+  if (!current) {
+    await db.runAsync(
+      `INSERT INTO anchors (id, name, amount, type, category_id, account_id, frequency, next_due_date, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      anchor.id,
+      anchor.name,
+      anchor.amount,
+      anchor.type,
+      anchor.categoryId,
+      anchor.accountId,
+      anchor.frequency,
+      anchor.nextDueDate,
+      anchor.active ? 1 : 0,
+      anchor.createdAt,
+      anchor.updatedAt,
+    );
+    return;
+  }
+
+  if (current.updatedAt === anchor.updatedAt) return;
+
+  if (current.updatedAt > anchor.updatedAt) {
+    logConflict({
+      entityType: 'anchor',
+      entityId: anchor.id,
+      resolution: 'kept-local',
+      localUpdatedAt: current.updatedAt,
+      remoteUpdatedAt: anchor.updatedAt,
+    });
+    return;
+  }
+
+  logConflict({
+    entityType: 'anchor',
+    entityId: anchor.id,
+    resolution: 'applied-remote',
+    localUpdatedAt: current.updatedAt,
+    remoteUpdatedAt: anchor.updatedAt,
+  });
+
   await db.runAsync(
-    `INSERT INTO anchors (id, name, amount, type, category_id, account_id, frequency, next_due_date, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       name = excluded.name,
-       amount = excluded.amount,
-       type = excluded.type,
-       category_id = excluded.category_id,
-       account_id = excluded.account_id,
-       frequency = excluded.frequency,
-       next_due_date = excluded.next_due_date,
-       active = excluded.active,
-       updated_at = excluded.updated_at
-     WHERE excluded.updated_at > anchors.updated_at`,
-    anchor.id,
+    `UPDATE anchors
+     SET name = ?, amount = ?, type = ?, category_id = ?, account_id = ?, frequency = ?, next_due_date = ?, active = ?, updated_at = ?
+     WHERE id = ?`,
     anchor.name,
     anchor.amount,
     anchor.type,
@@ -182,8 +214,8 @@ export async function upsertAnchorFromRemote(anchor: Anchor): Promise<void> {
     anchor.frequency,
     anchor.nextDueDate,
     anchor.active ? 1 : 0,
-    anchor.createdAt,
     anchor.updatedAt,
+    anchor.id,
   );
 }
 

@@ -6,7 +6,7 @@ Havn é **local-first**: o SQLite do dispositivo (`src/lib/db/`) é a fonte da v
 
 Cada mutação nas entidades locais (contas, categorias, transações, âncoras) grava, além da tabela da entidade, um registro numa **fila de sincronização** (`sync_queue`). Essa fila é a ponte entre "o que mudou localmente" e "o que ainda falta subir pro servidor".
 
-Quando há conectividade, `src/lib/sync.ts` processa a fila em ordem: envia cada mudança pendente ao Supabase, marca como `synced` em caso de sucesso ou `error` em caso de falha (permitindo retry depois), e então puxa as tabelas remotas e mescla localmente via `INSERT ... ON CONFLICT DO UPDATE WHERE excluded.updated_at > <tabela>.updated_at` — um last-write-wins básico por timestamp. Resolução de conflitos mais sofisticada (issue #21) fica fora do escopo desta decisão.
+Quando há conectividade, `src/lib/sync.ts` processa a fila em ordem: envia cada mudança pendente ao Supabase, marca como `synced` em caso de sucesso ou `error` em caso de falha (permitindo retry depois), e então puxa as tabelas remotas e mescla localmente. Conflitos (a mesma entidade mudou dos dois lados) são resolvidos por **last-write-wins** comparando `updated_at`, tanto no push quanto no pull — ver detalhes na seção de sincronização abaixo.
 
 ## Por que fila (não sync direto)
 
@@ -40,8 +40,13 @@ DAO correspondente: `src/lib/db/repositories/syncQueueRepository.ts` (`enqueueSy
   - `watchConnectivityAndSync()` — escuta mudanças de rede e dispara `syncNow()` sempre que o dispositivo volta a ficar online.
 - Chamado no boot do app e no listener de conectividade (`App.tsx`).
 - Merge das entidades puxadas usa as funções `upsert*FromRemote` de cada repositório (não passam pela fila de novo, evitando eco push→pull→push).
+- Indicador visual do estado (`offline`/`syncing`/`synced`/`error`) — `src/lib/syncStatus.ts` + `src/components/SyncStatusBar.tsx` (issue #20).
 
-## O que fica para depois
+## Resolução de conflitos (issue #21)
 
-- **Indicador visual de estado de sync** — issue #20.
-- **Resolução de conflitos** mais robusta que o last-write-wins por timestamp — issue #21.
+Estratégia: **last-write-wins** por `updated_at`, comparado em código (não só via SQL) para poder logar quando um conflito de fato acontece.
+
+- **Pull** (`upsert*FromRemote` em cada repositório de accounts/anchors/transactions): busca a linha local atual, compara `updatedAt`. Se local é mais novo, mantém local (`kept-local`) e ignora a linha remota; se remoto é mais novo, aplica (`applied-remote`); se são iguais, não faz nada. Só conta como conflito quando a linha já existia localmente — a primeira vez que uma entidade chega do servidor é inserção normal, não conflito.
+- **Push** (`pushPendingChanges` em `src/lib/sync.ts`): antes de sobrescrever, busca só o `updated_at` remoto atual; se o remoto já é mais novo que o payload local pendente (alguém sincronizou uma versão mais recente enquanto este dispositivo estava offline), a entrada da fila é descartada em favor do remoto (`kept-remote`) — o próximo pull traz a versão correta pra cá.
+- **Categorias** não têm `updated_at` (schema local e remoto), então não participam da checagem de conflito — upsert simples, última escrita vence sem comparação.
+- **Log de debug**: `src/lib/conflictLog.ts` — toda resolução de conflito (`kept-local` / `applied-remote` / `kept-remote`) é registrada em `console.log` e mantida num buffer em memória (`getConflictLog()`, últimas 100 entradas) para inspeção durante desenvolvimento.

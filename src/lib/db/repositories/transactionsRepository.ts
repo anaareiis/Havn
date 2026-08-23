@@ -1,3 +1,4 @@
+import { logConflict } from '../../conflictLog';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Transaction, TransactionType } from '../types';
@@ -210,20 +211,51 @@ export async function removeTransaction(id: string): Promise<void> {
 
 export async function upsertTransactionFromRemote(transaction: Transaction): Promise<void> {
   const db = await getDatabase();
+  const current = await findTransactionById(transaction.id);
+
+  if (!current) {
+    await db.runAsync(
+      `INSERT INTO transactions (id, account_id, category_id, anchor_id, amount, type, description, date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      transaction.id,
+      transaction.accountId,
+      transaction.categoryId,
+      transaction.anchorId,
+      transaction.amount,
+      transaction.type,
+      transaction.description,
+      transaction.date,
+      transaction.createdAt,
+      transaction.updatedAt,
+    );
+    return;
+  }
+
+  if (current.updatedAt === transaction.updatedAt) return;
+
+  if (current.updatedAt > transaction.updatedAt) {
+    logConflict({
+      entityType: 'transaction',
+      entityId: transaction.id,
+      resolution: 'kept-local',
+      localUpdatedAt: current.updatedAt,
+      remoteUpdatedAt: transaction.updatedAt,
+    });
+    return;
+  }
+
+  logConflict({
+    entityType: 'transaction',
+    entityId: transaction.id,
+    resolution: 'applied-remote',
+    localUpdatedAt: current.updatedAt,
+    remoteUpdatedAt: transaction.updatedAt,
+  });
+
   await db.runAsync(
-    `INSERT INTO transactions (id, account_id, category_id, anchor_id, amount, type, description, date, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       account_id = excluded.account_id,
-       category_id = excluded.category_id,
-       anchor_id = excluded.anchor_id,
-       amount = excluded.amount,
-       type = excluded.type,
-       description = excluded.description,
-       date = excluded.date,
-       updated_at = excluded.updated_at
-     WHERE excluded.updated_at > transactions.updated_at`,
-    transaction.id,
+    `UPDATE transactions
+     SET account_id = ?, category_id = ?, anchor_id = ?, amount = ?, type = ?, description = ?, date = ?, updated_at = ?
+     WHERE id = ?`,
     transaction.accountId,
     transaction.categoryId,
     transaction.anchorId,
@@ -231,8 +263,8 @@ export async function upsertTransactionFromRemote(transaction: Transaction): Pro
     transaction.type,
     transaction.description,
     transaction.date,
-    transaction.createdAt,
     transaction.updatedAt,
+    transaction.id,
   );
 }
 

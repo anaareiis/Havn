@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import { ensureSession } from './auth';
+import { logConflict } from './conflictLog';
 import {
   type Account,
   type Anchor,
@@ -109,13 +110,38 @@ async function pushPendingChanges(userId: string): Promise<void> {
       if (entry.operation === 'delete') {
         const { error } = await supabase.from(table).delete().eq('id', entry.entityId);
         if (error) throw error;
-      } else {
-        if (!entry.payload) throw new Error('Missing payload for create/update sync entry');
-        const row = toRemoteRow(entry.entityType, JSON.parse(entry.payload), userId);
-        const { error } = await supabase.from(table).upsert(row);
-        if (error) throw error;
+        await markSyncEntrySynced(entry.id);
+        continue;
       }
 
+      if (!entry.payload) throw new Error('Missing payload for create/update sync entry');
+      const localEntity = JSON.parse(entry.payload) as { updatedAt?: string };
+
+      // Categories have no updated_at column locally or remotely — no LWW check needed.
+      if (table !== 'categories' && localEntity.updatedAt) {
+        const { data: remoteRow, error: fetchError } = await supabase
+          .from(table)
+          .select('updated_at')
+          .eq('id', entry.entityId)
+          .maybeSingle();
+        if (fetchError) throw fetchError;
+
+        if (remoteRow && remoteRow.updated_at > localEntity.updatedAt) {
+          logConflict({
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            resolution: 'kept-remote',
+            localUpdatedAt: localEntity.updatedAt,
+            remoteUpdatedAt: remoteRow.updated_at,
+          });
+          await markSyncEntrySynced(entry.id);
+          continue;
+        }
+      }
+
+      const row = toRemoteRow(entry.entityType, localEntity, userId);
+      const { error } = await supabase.from(table).upsert(row);
+      if (error) throw error;
       await markSyncEntrySynced(entry.id);
     } catch (error) {
       await markSyncEntryError(entry.id, error instanceof Error ? error.message : String(error));
