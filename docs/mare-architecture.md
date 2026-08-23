@@ -6,7 +6,7 @@ Havn é **local-first**: o SQLite do dispositivo (`src/lib/db/`) é a fonte da v
 
 Cada mutação nas entidades locais (contas, categorias, transações, âncoras) grava, além da tabela da entidade, um registro numa **fila de sincronização** (`sync_queue`). Essa fila é a ponte entre "o que mudou localmente" e "o que ainda falta subir pro servidor".
 
-Quando houver conectividade (issue #19) e um backend configurado (issue #18), um worker de sync processa a fila em ordem: envia cada mudança pendente, marca como `synced` em caso de sucesso ou `error` em caso de falha (permitindo retry depois). Resolução de conflitos (issue #21) fica fora do escopo desta decisão — a estratégia (last-write-wins vs. merge) será definida naquela issue, usando os timestamps já presentes em cada entidade (`updated_at`) e na própria fila (`created_at`).
+Quando há conectividade, `src/lib/sync.ts` processa a fila em ordem: envia cada mudança pendente ao Supabase, marca como `synced` em caso de sucesso ou `error` em caso de falha (permitindo retry depois), e então puxa as tabelas remotas e mescla localmente via `INSERT ... ON CONFLICT DO UPDATE WHERE excluded.updated_at > <tabela>.updated_at` — um last-write-wins básico por timestamp. Resolução de conflitos mais sofisticada (issue #21) fica fora do escopo desta decisão.
 
 ## Por que fila (não sync direto)
 
@@ -32,9 +32,16 @@ Tabela `sync_queue` (migration v4, `src/lib/db/schema.ts`):
 
 DAO correspondente: `src/lib/db/repositories/syncQueueRepository.ts` (`enqueueSyncEntry`, `findPendingSyncEntries`, `markSyncEntrySynced`, `markSyncEntryError`).
 
+## Sincronização (issue #19)
+
+- Todo `create`/`update`/`delete` de conta, categoria, âncora e transação chama `enqueueSyncEntry` automaticamente, dentro do próprio repositório.
+- `src/lib/sync.ts`:
+  - `syncNow()` — checa conectividade (`@react-native-community/netinfo`), garante uma sessão Supabase, envia a fila pendente (`pushPendingChanges`) e puxa+mescla as tabelas remotas (`pullRemoteChanges`).
+  - `watchConnectivityAndSync()` — escuta mudanças de rede e dispara `syncNow()` sempre que o dispositivo volta a ficar online.
+- Chamado no boot do app e no listener de conectividade (`App.tsx`).
+- Merge das entidades puxadas usa as funções `upsert*FromRemote` de cada repositório (não passam pela fila de novo, evitando eco push→pull→push).
+
 ## O que fica para depois
 
-- **Enfileiramento automático** a cada `create`/`update`/`delete` das entidades existentes — planejado para quando o backend remoto (#18) existir; enfileirar sem nada para consumir a fila só acumularia registros sem propósito.
-- **Worker de envio** e reconexão automática — issue #19.
 - **Indicador visual de estado de sync** — issue #20.
-- **Resolução de conflitos** — issue #21.
+- **Resolução de conflitos** mais robusta que o last-write-wins por timestamp — issue #21.

@@ -1,6 +1,7 @@
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Account, AccountType } from '../types';
+import { enqueueSyncEntry } from './syncQueueRepository';
 
 interface AccountRow {
   id: string;
@@ -50,6 +51,13 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
     account.updatedAt,
   );
 
+  await enqueueSyncEntry({
+    entityType: 'account',
+    entityId: account.id,
+    operation: 'create',
+    payload: JSON.stringify(account),
+  });
+
   return account;
 }
 
@@ -83,11 +91,44 @@ export async function updateAccount(
     updated.updatedAt,
     id,
   );
+
+  await enqueueSyncEntry({
+    entityType: 'account',
+    entityId: id,
+    operation: 'update',
+    payload: JSON.stringify(updated),
+  });
 }
 
 export async function removeAccount(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM accounts WHERE id = ?', id);
+
+  await enqueueSyncEntry({
+    entityType: 'account',
+    entityId: id,
+    operation: 'delete',
+  });
+}
+
+export async function upsertAccountFromRemote(account: Account): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO accounts (id, name, type, balance, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       type = excluded.type,
+       balance = excluded.balance,
+       updated_at = excluded.updated_at
+     WHERE excluded.updated_at > accounts.updated_at`,
+    account.id,
+    account.name,
+    account.type,
+    account.balance,
+    account.createdAt,
+    account.updatedAt,
+  );
 }
 
 export async function getAccountBalance(id: string): Promise<number> {

@@ -1,6 +1,7 @@
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Transaction, TransactionType } from '../types';
+import { enqueueSyncEntry } from './syncQueueRepository';
 
 interface TransactionRow {
   id: string;
@@ -70,6 +71,13 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     transaction.createdAt,
     transaction.updatedAt,
   );
+
+  await enqueueSyncEntry({
+    entityType: 'transaction',
+    entityId: transaction.id,
+    operation: 'create',
+    payload: JSON.stringify(transaction),
+  });
 
   return transaction;
 }
@@ -180,11 +188,52 @@ export async function updateTransaction(
     updated.updatedAt,
     id,
   );
+
+  await enqueueSyncEntry({
+    entityType: 'transaction',
+    entityId: id,
+    operation: 'update',
+    payload: JSON.stringify(updated),
+  });
 }
 
 export async function removeTransaction(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
+
+  await enqueueSyncEntry({
+    entityType: 'transaction',
+    entityId: id,
+    operation: 'delete',
+  });
+}
+
+export async function upsertTransactionFromRemote(transaction: Transaction): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO transactions (id, account_id, category_id, anchor_id, amount, type, description, date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       account_id = excluded.account_id,
+       category_id = excluded.category_id,
+       anchor_id = excluded.anchor_id,
+       amount = excluded.amount,
+       type = excluded.type,
+       description = excluded.description,
+       date = excluded.date,
+       updated_at = excluded.updated_at
+     WHERE excluded.updated_at > transactions.updated_at`,
+    transaction.id,
+    transaction.accountId,
+    transaction.categoryId,
+    transaction.anchorId,
+    transaction.amount,
+    transaction.type,
+    transaction.description,
+    transaction.date,
+    transaction.createdAt,
+    transaction.updatedAt,
+  );
 }
 
 export interface PeriodTotals {

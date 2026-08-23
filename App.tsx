@@ -3,9 +3,9 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState } from 'react-native';
 
-import { ensureSession } from './src/lib/auth';
 import { processDueAnchors } from './src/lib/db';
 import { getAnchorNoticeDays, scheduleAnchorNotifications } from './src/lib/notifications';
+import { syncNow, watchConnectivityAndSync } from './src/lib/sync';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ThemeProvider, fontsToLoad } from './src/theme';
 
@@ -27,9 +27,12 @@ export default function App() {
   }, [fontsLoaded]);
 
   useEffect(() => {
-    ensureSession().catch((error) => {
-      console.warn('Failed to establish a Supabase session', error);
+    syncNow().catch((error) => {
+      console.warn('Havn sync failed', error);
     });
+
+    const unwatch = watchConnectivityAndSync();
+    return unwatch;
   }, []);
 
   useEffect(() => {

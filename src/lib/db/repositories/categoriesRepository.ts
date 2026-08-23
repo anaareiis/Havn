@@ -1,6 +1,7 @@
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Category, CategoryType } from '../types';
+import { enqueueSyncEntry } from './syncQueueRepository';
 
 interface CategoryRow {
   id: string;
@@ -50,6 +51,13 @@ export async function createCategory(input: CreateCategoryInput): Promise<Catego
     category.createdAt,
   );
 
+  await enqueueSyncEntry({
+    entityType: 'category',
+    entityId: category.id,
+    operation: 'create',
+    payload: JSON.stringify(category),
+  });
+
   return category;
 }
 
@@ -83,9 +91,41 @@ export async function updateCategory(
     updated.type,
     id,
   );
+
+  await enqueueSyncEntry({
+    entityType: 'category',
+    entityId: id,
+    operation: 'update',
+    payload: JSON.stringify(updated),
+  });
 }
 
 export async function removeCategory(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM categories WHERE id = ?', id);
+
+  await enqueueSyncEntry({
+    entityType: 'category',
+    entityId: id,
+    operation: 'delete',
+  });
+}
+
+export async function upsertCategoryFromRemote(category: Category): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO categories (id, name, icon, color, type, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       icon = excluded.icon,
+       color = excluded.color,
+       type = excluded.type`,
+    category.id,
+    category.name,
+    category.icon,
+    category.color,
+    category.type,
+    category.createdAt,
+  );
 }

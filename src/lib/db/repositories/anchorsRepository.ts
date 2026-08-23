@@ -2,6 +2,7 @@ import { advanceDate, todayIso } from '../../date';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Anchor, AnchorFrequency, TransactionType } from '../types';
+import { enqueueSyncEntry } from './syncQueueRepository';
 import { createTransaction } from './transactionsRepository';
 
 interface AnchorRow {
@@ -77,6 +78,13 @@ export async function createAnchor(input: CreateAnchorInput): Promise<Anchor> {
     anchor.updatedAt,
   );
 
+  await enqueueSyncEntry({
+    entityType: 'anchor',
+    entityId: anchor.id,
+    operation: 'create',
+    payload: JSON.stringify(anchor),
+  });
+
   return anchor;
 }
 
@@ -129,11 +137,54 @@ export async function updateAnchor(
     updated.updatedAt,
     id,
   );
+
+  await enqueueSyncEntry({
+    entityType: 'anchor',
+    entityId: id,
+    operation: 'update',
+    payload: JSON.stringify(updated),
+  });
 }
 
 export async function removeAnchor(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM anchors WHERE id = ?', id);
+
+  await enqueueSyncEntry({
+    entityType: 'anchor',
+    entityId: id,
+    operation: 'delete',
+  });
+}
+
+export async function upsertAnchorFromRemote(anchor: Anchor): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO anchors (id, name, amount, type, category_id, account_id, frequency, next_due_date, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       amount = excluded.amount,
+       type = excluded.type,
+       category_id = excluded.category_id,
+       account_id = excluded.account_id,
+       frequency = excluded.frequency,
+       next_due_date = excluded.next_due_date,
+       active = excluded.active,
+       updated_at = excluded.updated_at
+     WHERE excluded.updated_at > anchors.updated_at`,
+    anchor.id,
+    anchor.name,
+    anchor.amount,
+    anchor.type,
+    anchor.categoryId,
+    anchor.accountId,
+    anchor.frequency,
+    anchor.nextDueDate,
+    anchor.active ? 1 : 0,
+    anchor.createdAt,
+    anchor.updatedAt,
+  );
 }
 
 export function monthlyEquivalent(amount: number, frequency: AnchorFrequency): number {
