@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState } from 'react-native';
@@ -6,8 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { processDueAnchors } from './src/lib/db';
 import { getAnchorNoticeDays, scheduleAnchorNotifications } from './src/lib/notifications';
+import { hasPin } from './src/lib/pin';
 import { syncNow, watchConnectivityAndSync } from './src/lib/sync';
 import RootNavigator from './src/navigation/RootNavigator';
+import LockScreen from './src/screens/LockScreen';
 import { ThemeProvider, fontsToLoad } from './src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -20,12 +22,17 @@ async function syncAnchors() {
 
 export default function App() {
   const [fontsLoaded] = useFonts(fontsToLoad);
+  const [locked, setLocked] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (fontsLoaded) {
+    hasPin().then(setLocked);
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded && locked !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, locked]);
 
   useEffect(() => {
     syncNow().catch((error) => {
@@ -48,14 +55,14 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || locked === null) {
     return null;
   }
 
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <RootNavigator />
+        {locked ? <LockScreen onUnlock={() => setLocked(false)} /> : <RootNavigator />}
       </ThemeProvider>
     </SafeAreaProvider>
   );
