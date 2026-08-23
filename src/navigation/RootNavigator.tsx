@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 
+import { SyncStatusBar } from '../components/SyncStatusBar';
 import AccountsScreen from '../screens/AccountsScreen';
 import AnchorsScreen from '../screens/AnchorsScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
@@ -22,7 +23,8 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 export default function RootNavigator() {
   return (
     <NavigationContainer>
-      <Tab.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
+      <SyncStatusBar />
+      <Tab.Navigator screenOptions={{ headerTitleAlign: 'center', headerStatusBarHeight: 0 }}>
         <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
         <Tab.Screen name="Contas" component={AccountsScreen} options={{ title: 'Contas' }} />
         <Tab.Screen

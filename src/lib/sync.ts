@@ -16,6 +16,7 @@ import {
   upsertTransactionFromRemote,
 } from './db';
 import { supabase } from './supabase';
+import { setSyncStatus } from './syncStatus';
 
 type RemoteTable = 'accounts' | 'categories' | 'anchors' | 'transactions';
 
@@ -197,11 +198,19 @@ export async function syncNow(): Promise<void> {
 
   try {
     const netState = await NetInfo.fetch();
-    if (!netState.isConnected || netState.isInternetReachable === false) return;
+    if (!netState.isConnected || netState.isInternetReachable === false) {
+      setSyncStatus('offline');
+      return;
+    }
 
+    setSyncStatus('syncing');
     const userId = await ensureSession();
     await pushPendingChanges(userId);
     await pullRemoteChanges();
+    setSyncStatus('synced');
+  } catch (error) {
+    setSyncStatus('error');
+    throw error;
   } finally {
     isSyncing = false;
   }
@@ -212,11 +221,15 @@ export function watchConnectivityAndSync(): () => void {
 
   const unsubscribe = NetInfo.addEventListener((state) => {
     const isConnected = Boolean(state.isConnected && state.isInternetReachable !== false);
-    if (isConnected && wasConnected === false) {
+
+    if (!isConnected) {
+      setSyncStatus('offline');
+    } else if (wasConnected === false) {
       syncNow().catch((error) => {
         console.warn('Havn sync failed', error);
       });
     }
+
     wasConnected = isConnected;
   });
 

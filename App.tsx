@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { processDueAnchors } from './src/lib/db';
 import { getAnchorNoticeDays, scheduleAnchorNotifications } from './src/lib/notifications';
@@ -52,8 +53,10 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
-      <RootNavigator />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <RootNavigator />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
