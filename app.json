@@ -39,7 +39,13 @@
       "expo-asset",
       "expo-sqlite",
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir que o Havn use Face ID para desbloquear o app."
+        }
+      ]
     ]
   }
 }

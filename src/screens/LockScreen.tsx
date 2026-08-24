@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Card, Input } from '../components';
+import {
+  authenticateWithBiometrics,
+  isBiometricAvailable,
+  isBiometricEnabled,
+} from '../lib/biometrics';
 import { verifyPin } from '../lib/pin';
 import { useTheme } from '../theme';
 
@@ -13,6 +18,21 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
   const theme = useTheme();
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | undefined>();
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  const tryBiometrics = useCallback(async () => {
+    const [available, enabled] = await Promise.all([isBiometricAvailable(), isBiometricEnabled()]);
+    setBiometricAvailable(available && enabled);
+
+    if (available && enabled) {
+      const success = await authenticateWithBiometrics();
+      if (success) onUnlock();
+    }
+  }, [onUnlock]);
+
+  useEffect(() => {
+    tryBiometrics();
+  }, [tryBiometrics]);
 
   async function handleUnlock() {
     const isValid = await verifyPin(pin);
@@ -76,6 +96,10 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
           disabled={pin.length !== 4}
           onPress={handleUnlock}
         />
+
+        {biometricAvailable ? (
+          <Button label="Usar biometria" variant="outline" onPress={tryBiometrics} />
+        ) : null}
       </Card>
     </View>
   );

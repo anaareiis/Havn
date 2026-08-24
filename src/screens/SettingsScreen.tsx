@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card, Input } from '../components';
+import { isBiometricAvailable, isBiometricEnabled, setBiometricEnabled } from '../lib/biometrics';
 import {
   DEFAULT_ANCHOR_NOTICE_DAYS,
   getAnchorNoticeDays,
@@ -28,6 +29,9 @@ export default function SettingsScreen() {
   const [pinError, setPinError] = useState<string | undefined>();
   const [pinSaved, setPinSaved] = useState(false);
 
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
+
   const loadNoticeDays = useCallback(async () => {
     const days = await getAnchorNoticeDays();
     setNoticeDaysText(String(days));
@@ -37,12 +41,25 @@ export default function SettingsScreen() {
     setPinExists(await hasPin());
   }, []);
 
+  const loadBiometricStatus = useCallback(async () => {
+    const [available, enabled] = await Promise.all([isBiometricAvailable(), isBiometricEnabled()]);
+    setBiometricAvailable(available);
+    setBiometricEnabledState(enabled);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadNoticeDays();
       loadPinStatus();
-    }, [loadNoticeDays, loadPinStatus]),
+      loadBiometricStatus();
+    }, [loadNoticeDays, loadPinStatus, loadBiometricStatus]),
   );
+
+  async function handleToggleBiometric() {
+    const next = !biometricEnabled;
+    await setBiometricEnabled(next);
+    setBiometricEnabledState(next);
+  }
 
   async function handleSave() {
     const parsed = Number(noticeDaysText);
@@ -74,7 +91,9 @@ export default function SettingsScreen() {
         return;
       }
       await clearPin();
+      await setBiometricEnabled(false);
       setPinExists(false);
+      setBiometricEnabledState(false);
       setPinModalMode(null);
       return;
     }
@@ -202,6 +221,27 @@ export default function SettingsScreen() {
             <Button label="Criar PIN" variant="primary" onPress={() => openPinModal('create')} />
           )}
         </View>
+
+        {pinExists && biometricAvailable ? (
+          <Button
+            label={biometricEnabled ? 'Desativar biometria' : 'Desbloquear com biometria'}
+            variant={biometricEnabled ? 'outline' : 'accent'}
+            onPress={handleToggleBiometric}
+          />
+        ) : null}
+
+        {pinExists && !biometricAvailable ? (
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontFamily: theme.fontFamily.rounded.regular,
+              fontSize: theme.fontSize.xs,
+            }}
+          >
+            Biometria indisponível neste dispositivo (sem hardware ou nenhuma digital/rosto
+            cadastrado).
+          </Text>
+        ) : null}
       </Card>
 
       <Modal
