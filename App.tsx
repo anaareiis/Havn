@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { getLockTimeoutMinutes } from './src/lib/appLock';
 import { processDueAnchors } from './src/lib/db';
 import { getAnchorNoticeDays, scheduleAnchorNotifications } from './src/lib/notifications';
 import { hasPin } from './src/lib/pin';
@@ -49,6 +50,31 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         syncAnchors();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const backgroundedAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (state) => {
+      if (state === 'background' || state === 'inactive') {
+        backgroundedAtRef.current = Date.now();
+        return;
+      }
+
+      if (state === 'active' && backgroundedAtRef.current !== null) {
+        const elapsedMinutes = (Date.now() - backgroundedAtRef.current) / 60000;
+        backgroundedAtRef.current = null;
+
+        if (!(await hasPin())) return;
+
+        const timeoutMinutes = await getLockTimeoutMinutes();
+        if (elapsedMinutes >= timeoutMinutes) {
+          setLocked(true);
+        }
       }
     });
 

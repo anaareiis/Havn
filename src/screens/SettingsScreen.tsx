@@ -3,6 +3,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card, Input } from '../components';
+import {
+  DEFAULT_LOCK_TIMEOUT_MINUTES,
+  getLockTimeoutMinutes,
+  setLockTimeoutMinutes,
+} from '../lib/appLock';
 import { isBiometricAvailable, isBiometricEnabled, setBiometricEnabled } from '../lib/biometrics';
 import {
   DEFAULT_ANCHOR_NOTICE_DAYS,
@@ -32,6 +37,10 @@ export default function SettingsScreen() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
 
+  const [lockTimeoutText, setLockTimeoutText] = useState(String(DEFAULT_LOCK_TIMEOUT_MINUTES));
+  const [lockTimeoutError, setLockTimeoutError] = useState<string | undefined>();
+  const [lockTimeoutSaved, setLockTimeoutSaved] = useState(false);
+
   const loadNoticeDays = useCallback(async () => {
     const days = await getAnchorNoticeDays();
     setNoticeDaysText(String(days));
@@ -47,18 +56,36 @@ export default function SettingsScreen() {
     setBiometricEnabledState(enabled);
   }, []);
 
+  const loadLockTimeout = useCallback(async () => {
+    setLockTimeoutText(String(await getLockTimeoutMinutes()));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadNoticeDays();
       loadPinStatus();
       loadBiometricStatus();
-    }, [loadNoticeDays, loadPinStatus, loadBiometricStatus]),
+      loadLockTimeout();
+    }, [loadNoticeDays, loadPinStatus, loadBiometricStatus, loadLockTimeout]),
   );
 
   async function handleToggleBiometric() {
     const next = !biometricEnabled;
     await setBiometricEnabled(next);
     setBiometricEnabledState(next);
+  }
+
+  async function handleSaveLockTimeout() {
+    const parsed = Number(lockTimeoutText);
+    if (!lockTimeoutText.trim() || !Number.isInteger(parsed) || parsed < 0) {
+      setLockTimeoutError('Informe um número inteiro maior ou igual a zero');
+      setLockTimeoutSaved(false);
+      return;
+    }
+
+    setLockTimeoutError(undefined);
+    await setLockTimeoutMinutes(parsed);
+    setLockTimeoutSaved(true);
   }
 
   async function handleSave() {
@@ -241,6 +268,37 @@ export default function SettingsScreen() {
             Biometria indisponível neste dispositivo (sem hardware ou nenhuma digital/rosto
             cadastrado).
           </Text>
+        ) : null}
+
+        {pinExists ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.fontFamily.rounded.regular,
+                fontSize: theme.fontSize.sm,
+              }}
+            >
+              Bloquear automaticamente após ficar em segundo plano por (minutos, 0 = sempre):
+            </Text>
+            <Input
+              label="Tempo de inatividade"
+              placeholder="1"
+              keyboardType="numeric"
+              value={lockTimeoutText}
+              onChangeText={(value) => {
+                setLockTimeoutText(value);
+                setLockTimeoutSaved(false);
+              }}
+              error={lockTimeoutError}
+            />
+            <Button label="Salvar" variant="outline" onPress={handleSaveLockTimeout} />
+            {lockTimeoutSaved ? (
+              <Text style={{ color: theme.colors.success, fontSize: theme.fontSize.xs }}>
+                Preferência salva.
+              </Text>
+            ) : null}
+          </View>
         ) : null}
       </Card>
 
