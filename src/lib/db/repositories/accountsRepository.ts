@@ -1,24 +1,26 @@
 import { logConflict } from '../../conflictLog';
+import { decryptNumber, encryptNumber } from '../../encryption';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Account, AccountType } from '../types';
 import { enqueueSyncEntry } from './syncQueueRepository';
+import { getSignedAmountTotalByAccount } from './transactionsRepository';
 
 interface AccountRow {
   id: string;
   name: string;
   type: AccountType;
-  balance: number;
+  balance: string;
   created_at: string;
   updated_at: string;
 }
 
-function mapRow(row: AccountRow): Account {
+async function mapRow(row: AccountRow): Promise<Account> {
   return {
     id: row.id,
     name: row.name,
     type: row.type,
-    balance: row.balance,
+    balance: await decryptNumber(row.balance),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -47,7 +49,7 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
     account.id,
     account.name,
     account.type,
-    account.balance,
+    await encryptNumber(account.balance),
     account.createdAt,
     account.updatedAt,
   );
@@ -65,7 +67,7 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
 export async function findAllAccounts(): Promise<Account[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<AccountRow>('SELECT * FROM accounts ORDER BY created_at ASC');
-  return rows.map(mapRow);
+  return Promise.all(rows.map(mapRow));
 }
 
 export async function findAccountById(id: string): Promise<Account | null> {
@@ -88,7 +90,7 @@ export async function updateAccount(
     'UPDATE accounts SET name = ?, type = ?, balance = ?, updated_at = ? WHERE id = ?',
     updated.name,
     updated.type,
-    updated.balance,
+    await encryptNumber(updated.balance),
     updated.updatedAt,
     id,
   );
@@ -122,7 +124,7 @@ export async function upsertAccountFromRemote(account: Account): Promise<void> {
       account.id,
       account.name,
       account.type,
-      account.balance,
+      await encryptNumber(account.balance),
       account.createdAt,
       account.updatedAt,
     );
@@ -154,24 +156,18 @@ export async function upsertAccountFromRemote(account: Account): Promise<void> {
     'UPDATE accounts SET name = ?, type = ?, balance = ?, updated_at = ? WHERE id = ?',
     account.name,
     account.type,
-    account.balance,
+    await encryptNumber(account.balance),
     account.updatedAt,
     account.id,
   );
 }
 
 export async function getAccountBalance(id: string): Promise<number> {
-  const db = await getDatabase();
   const account = await findAccountById(id);
   if (!account) return 0;
 
-  const result = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END) as total
-     FROM transactions WHERE account_id = ?`,
-    id,
-  );
-
-  return account.balance + (result?.total ?? 0);
+  const transactionsTotal = await getSignedAmountTotalByAccount(id);
+  return account.balance + transactionsTotal;
 }
 
 export interface AccountWithBalance extends Account {

@@ -1,4 +1,5 @@
 import { logConflict } from '../../conflictLog';
+import { decryptNullable, decryptNumber, encryptNullable, encryptNumber } from '../../encryption';
 import { getDatabase } from '../client';
 import { generateId } from '../id';
 import type { Transaction, TransactionType } from '../types';
@@ -9,7 +10,7 @@ interface TransactionRow {
   account_id: string;
   category_id: string | null;
   anchor_id: string | null;
-  amount: number;
+  amount: string;
   type: TransactionType;
   description: string | null;
   date: string;
@@ -17,15 +18,15 @@ interface TransactionRow {
   updated_at: string;
 }
 
-function mapRow(row: TransactionRow): Transaction {
+async function mapRow(row: TransactionRow): Promise<Transaction> {
   return {
     id: row.id,
     accountId: row.account_id,
     categoryId: row.category_id,
     anchorId: row.anchor_id,
-    amount: row.amount,
+    amount: await decryptNumber(row.amount),
     type: row.type,
-    description: row.description,
+    description: await decryptNullable(row.description),
     date: row.date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -65,9 +66,9 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     transaction.accountId,
     transaction.categoryId,
     transaction.anchorId,
-    transaction.amount,
+    await encryptNumber(transaction.amount),
     transaction.type,
-    transaction.description,
+    await encryptNullable(transaction.description),
     transaction.date,
     transaction.createdAt,
     transaction.updatedAt,
@@ -88,7 +89,7 @@ export async function findAllTransactions(): Promise<Transaction[]> {
   const rows = await db.getAllAsync<TransactionRow>(
     'SELECT * FROM transactions ORDER BY date DESC',
   );
-  return rows.map(mapRow);
+  return Promise.all(rows.map(mapRow));
 }
 
 export async function findTransactionsByAccountId(accountId: string): Promise<Transaction[]> {
@@ -97,7 +98,7 @@ export async function findTransactionsByAccountId(accountId: string): Promise<Tr
     'SELECT * FROM transactions WHERE account_id = ? ORDER BY date DESC',
     accountId,
   );
-  return rows.map(mapRow);
+  return Promise.all(rows.map(mapRow));
 }
 
 export interface TransactionFilters {
@@ -112,6 +113,12 @@ export interface TransactionQueryOptions extends TransactionFilters {
   limit?: number;
   offset?: number;
 }
+
+// Descriptions are encrypted at rest, so a text search can't be pushed down to
+// SQL (no LIKE over ciphertext). When searching, this many candidate rows are
+// fetched and decrypted in memory before filtering — a reasonable bound for a
+// personal finance app's history, not a fully scalable full-text search.
+const SEARCH_SCAN_LIMIT = 1000;
 
 export async function findTransactions(
   options: TransactionQueryOptions = {},
@@ -137,21 +144,30 @@ export async function findTransactions(
     conditions.push('date <= ?');
     params.push(options.endDate);
   }
-  if (options.search) {
-    conditions.push('description LIKE ?');
-    params.push(`%${options.search}%`);
-  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limit = options.limit ?? 20;
   const offset = options.offset ?? 0;
+  const search = options.search?.trim().toLowerCase();
 
-  const rows = await db.getAllAsync<TransactionRow>(
-    `SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`,
-    [...params, limit, offset],
+  if (!search) {
+    const rows = await db.getAllAsync<TransactionRow>(
+      `SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+    );
+    return Promise.all(rows.map(mapRow));
+  }
+
+  const candidateRows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT ?`,
+    [...params, SEARCH_SCAN_LIMIT],
+  );
+  const candidates = await Promise.all(candidateRows.map(mapRow));
+  const matched = candidates.filter((transaction) =>
+    (transaction.description ?? '').toLowerCase().includes(search),
   );
 
-  return rows.map(mapRow);
+  return matched.slice(offset, offset + limit);
 }
 
 export async function findTransactionById(id: string): Promise<Transaction | null> {
@@ -182,9 +198,9 @@ export async function updateTransaction(
     updated.accountId,
     updated.categoryId,
     updated.anchorId,
-    updated.amount,
+    await encryptNumber(updated.amount),
     updated.type,
-    updated.description,
+    await encryptNullable(updated.description),
     updated.date,
     updated.updatedAt,
     id,
@@ -221,9 +237,9 @@ export async function upsertTransactionFromRemote(transaction: Transaction): Pro
       transaction.accountId,
       transaction.categoryId,
       transaction.anchorId,
-      transaction.amount,
+      await encryptNumber(transaction.amount),
       transaction.type,
-      transaction.description,
+      await encryptNullable(transaction.description),
       transaction.date,
       transaction.createdAt,
       transaction.updatedAt,
@@ -259,13 +275,29 @@ export async function upsertTransactionFromRemote(transaction: Transaction): Pro
     transaction.accountId,
     transaction.categoryId,
     transaction.anchorId,
-    transaction.amount,
+    await encryptNumber(transaction.amount),
     transaction.type,
-    transaction.description,
+    await encryptNullable(transaction.description),
     transaction.date,
     transaction.updatedAt,
     transaction.id,
   );
+}
+
+export async function getSignedAmountTotalByAccount(accountId: string): Promise<number> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<Pick<TransactionRow, 'amount' | 'type'>>(
+    'SELECT amount, type FROM transactions WHERE account_id = ?',
+    accountId,
+  );
+
+  let total = 0;
+  for (const row of rows) {
+    const amount = await decryptNumber(row.amount);
+    total += row.type === 'income' ? amount : -amount;
+  }
+
+  return total;
 }
 
 export interface PeriodTotals {
@@ -275,19 +307,20 @@ export interface PeriodTotals {
 
 export async function getTotalsByPeriod(startDate: string, endDate: string): Promise<PeriodTotals> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<{ income: number | null; expense: number | null }>(
-    `SELECT
-       SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
-       SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
-     FROM transactions
-     WHERE date >= ? AND date <= ?`,
+  const rows = await db.getAllAsync<Pick<TransactionRow, 'amount' | 'type'>>(
+    'SELECT amount, type FROM transactions WHERE date >= ? AND date <= ?',
     [startDate, endDate],
   );
 
-  return {
-    totalIncome: row?.income ?? 0,
-    totalExpense: row?.expense ?? 0,
-  };
+  let totalIncome = 0;
+  let totalExpense = 0;
+  for (const row of rows) {
+    const amount = await decryptNumber(row.amount);
+    if (row.type === 'income') totalIncome += amount;
+    else totalExpense += amount;
+  }
+
+  return { totalIncome, totalExpense };
 }
 
 export interface CategoryTotal {
@@ -300,14 +333,20 @@ export async function getExpensesByCategory(
   endDate: string,
 ): Promise<CategoryTotal[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<{ category_id: string; total: number }>(
-    `SELECT category_id, SUM(amount) as total
-     FROM transactions
-     WHERE type = 'expense' AND date >= ? AND date <= ? AND category_id IS NOT NULL
-     GROUP BY category_id
-     ORDER BY total DESC`,
+  const rows = await db.getAllAsync<Pick<TransactionRow, 'amount' | 'category_id'>>(
+    `SELECT amount, category_id FROM transactions
+     WHERE type = 'expense' AND date >= ? AND date <= ? AND category_id IS NOT NULL`,
     [startDate, endDate],
   );
 
-  return rows.map((row) => ({ categoryId: row.category_id, total: row.total }));
+  const totalsByCategory = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.category_id) continue;
+    const amount = await decryptNumber(row.amount);
+    totalsByCategory.set(row.category_id, (totalsByCategory.get(row.category_id) ?? 0) + amount);
+  }
+
+  return Array.from(totalsByCategory.entries())
+    .map(([categoryId, total]) => ({ categoryId, total }))
+    .sort((a, b) => b.total - a.total);
 }
