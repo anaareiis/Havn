@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -88,6 +89,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
+        <StatusBar style="auto" />
         {locked ? <LockScreen onUnlock={() => setLocked(false)} /> : <RootNavigator />}
       </ThemeProvider>
     </SafeAreaProvider>

@@ -51,6 +51,7 @@ export interface ThemeColors {
   accentPressed: string;
   success: string;
   danger: string;
+  overlay: string;
 }
 
 export const lightColors: ThemeColors = {
@@ -68,6 +69,7 @@ export const lightColors: ThemeColors = {
   accentPressed: palette.gold700,
   success: palette.green400,
   danger: palette.red400,
+  overlay: 'rgba(0,0,0,0.4)',
 };
 
 export const darkColors: ThemeColors = {
@@ -85,4 +87,5 @@ export const darkColors: ThemeColors = {
   accentPressed: palette.gold100,
   success: palette.green300,
   danger: palette.red300,
+  overlay: 'rgba(0,0,0,0.4)',
 };

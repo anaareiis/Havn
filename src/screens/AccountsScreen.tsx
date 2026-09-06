@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, FlatList, Modal, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Text, View } from 'react-native';
 
-import { Badge, Button, Card, Input } from '../components';
+import { AppModal, Badge, Button, Card, Input } from '../components';
 import {
   type Account,
   type AccountType,
@@ -143,61 +143,45 @@ export default function AccountsScreen() {
         )}
       />
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={{ gap: theme.spacing.md }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.fontFamily.rounded.bold,
-                fontSize: theme.fontSize.lg,
-              }}
-            >
-              {editingAccount ? 'Editar conta' : 'Nova conta'}
-            </Text>
+      <AppModal visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <Card style={{ gap: theme.spacing.md }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fontFamily.rounded.bold,
+              fontSize: theme.fontSize.lg,
+            }}
+          >
+            {editingAccount ? 'Editar conta' : 'Nova conta'}
+          </Text>
 
-            <Input label="Nome" placeholder="Ex: Nubank" value={name} onChangeText={setName} />
+          <Input label="Nome" placeholder="Ex: Nubank" value={name} onChangeText={setName} />
 
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-              {ACCOUNT_TYPES.map((option) => (
-                <Button
-                  key={option.value}
-                  label={option.label}
-                  variant={type === option.value ? 'primary' : 'outline'}
-                  onPress={() => setType(option.value)}
-                />
-              ))}
-            </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+            {ACCOUNT_TYPES.map((option) => (
+              <Button
+                key={option.value}
+                label={option.label}
+                variant={type === option.value ? 'primary' : 'outline'}
+                onPress={() => setType(option.value)}
+              />
+            ))}
+          </View>
 
-            <Input
-              label="Saldo inicial"
-              placeholder="0,00"
-              keyboardType="numeric"
-              value={balance}
-              onChangeText={setBalance}
-            />
+          <Input
+            label="Saldo inicial"
+            placeholder="0,00"
+            keyboardType="numeric"
+            value={balance}
+            onChangeText={setBalance}
+          />
 
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
-              <Button label="Salvar" variant="primary" onPress={handleSave} />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
+            <Button label="Salvar" variant="primary" onPress={handleSave} />
+          </View>
+        </Card>
+      </AppModal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-});

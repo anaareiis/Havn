@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
-import { Button, Card, Input } from '../components';
+import { AppModal, Button, Card, Input } from '../components';
 import {
   DEFAULT_LOCK_TIMEOUT_MINUTES,
   getLockTimeoutMinutes,
@@ -294,7 +294,13 @@ export default function SettingsScreen() {
             />
             <Button label="Salvar" variant="outline" onPress={handleSaveLockTimeout} />
             {lockTimeoutSaved ? (
-              <Text style={{ color: theme.colors.success, fontSize: theme.fontSize.xs }}>
+              <Text
+                style={{
+                  color: theme.colors.success,
+                  fontFamily: theme.fontFamily.rounded.regular,
+                  fontSize: theme.fontSize.xs,
+                }}
+              >
                 Preferência salva.
               </Text>
             ) : null}
@@ -302,93 +308,89 @@ export default function SettingsScreen() {
         ) : null}
       </Card>
 
-      <Modal
-        visible={pinModalMode !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPinModalMode(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={{ gap: theme.spacing.md }}>
-            <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.fontFamily.rounded.bold,
-                fontSize: theme.fontSize.lg,
-              }}
-            >
-              {pinModalMode === 'create' && 'Criar PIN'}
-              {pinModalMode === 'change' && 'Alterar PIN'}
-              {pinModalMode === 'remove' && 'Remover PIN'}
-            </Text>
+      <AppModal visible={pinModalMode !== null} onRequestClose={() => setPinModalMode(null)}>
+        <Card style={{ gap: theme.spacing.md }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fontFamily.rounded.bold,
+              fontSize: theme.fontSize.lg,
+            }}
+          >
+            {pinModalMode === 'create' && 'Criar PIN'}
+            {pinModalMode === 'change' && 'Alterar PIN'}
+            {pinModalMode === 'remove' && 'Remover PIN'}
+          </Text>
 
-            {pinModalMode !== 'create' ? (
+          {pinModalMode !== 'create' ? (
+            <Input
+              label="PIN atual"
+              placeholder="••••"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={4}
+              value={currentPinText}
+              onChangeText={setCurrentPinText}
+            />
+          ) : null}
+
+          {pinModalMode !== 'remove' ? (
+            <>
               <Input
-                label="PIN atual"
+                label="Novo PIN"
                 placeholder="••••"
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={4}
-                value={currentPinText}
-                onChangeText={setCurrentPinText}
+                value={newPinText}
+                onChangeText={setNewPinText}
               />
-            ) : null}
-
-            {pinModalMode !== 'remove' ? (
-              <>
-                <Input
-                  label="Novo PIN"
-                  placeholder="••••"
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                  value={newPinText}
-                  onChangeText={setNewPinText}
-                />
-                <Input
-                  label="Confirmar novo PIN"
-                  placeholder="••••"
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                  value={confirmPinText}
-                  onChangeText={setConfirmPinText}
-                />
-              </>
-            ) : null}
-
-            {pinError ? (
-              <Text style={{ color: theme.colors.danger, fontSize: theme.fontSize.xs }}>
-                {pinError}
-              </Text>
-            ) : null}
-
-            {pinSaved ? (
-              <Text style={{ color: theme.colors.success, fontSize: theme.fontSize.xs }}>
-                PIN salvo.
-              </Text>
-            ) : null}
-
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <Button label="Cancelar" variant="outline" onPress={() => setPinModalMode(null)} />
-              <Button
-                label={pinModalMode === 'remove' ? 'Remover' : 'Salvar'}
-                variant="primary"
-                onPress={handlePinSubmit}
+              <Input
+                label="Confirmar novo PIN"
+                placeholder="••••"
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+                value={confirmPinText}
+                onChangeText={setConfirmPinText}
               />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+            </>
+          ) : null}
+
+          {pinError ? (
+            <Text
+              style={{
+                color: theme.colors.danger,
+                fontFamily: theme.fontFamily.rounded.regular,
+                fontSize: theme.fontSize.xs,
+              }}
+            >
+              {pinError}
+            </Text>
+          ) : null}
+
+          {pinSaved ? (
+            <Text
+              style={{
+                color: theme.colors.success,
+                fontFamily: theme.fontFamily.rounded.regular,
+                fontSize: theme.fontSize.xs,
+              }}
+            >
+              PIN salvo.
+            </Text>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <Button label="Cancelar" variant="outline" onPress={() => setPinModalMode(null)} />
+            <Button
+              label={pinModalMode === 'remove' ? 'Remover' : 'Salvar'}
+              variant="primary"
+              onPress={handlePinSubmit}
+            />
+          </View>
+        </Card>
+      </AppModal>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-});

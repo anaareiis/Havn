@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Badge, Button, Card, Input } from '../components';
+import { AppModal, Badge, Button, Card, Input } from '../components';
 import {
   type Category,
   type CategoryType,
@@ -11,17 +11,17 @@ import {
   removeCategory,
   updateCategory,
 } from '../lib/db';
-import { useTheme } from '../theme';
+import { palette, useTheme } from '../theme';
 
-const CATEGORY_COLORS = [
-  '#D14343',
-  '#0F4C81',
-  '#C79A45',
-  '#8A6A22',
-  '#2E9E6C',
-  '#4A9FDE',
-  '#5B6B7C',
-  '#1F7A54',
+const CATEGORY_COLORS: string[] = [
+  palette.red400,
+  palette.blue700,
+  palette.gold500,
+  palette.gold700,
+  palette.green400,
+  palette.blue400,
+  palette.slate500,
+  palette.green600,
 ];
 
 const CATEGORY_TYPES: { value: CategoryType; label: string }[] = [
@@ -160,92 +160,79 @@ export default function CategoriesScreen() {
         )}
       />
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={{ gap: theme.spacing.md }}>
+      <AppModal visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <Card style={{ gap: theme.spacing.md }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fontFamily.rounded.bold,
+              fontSize: theme.fontSize.lg,
+            }}
+          >
+            {editingCategory ? 'Editar categoria' : 'Nova categoria'}
+          </Text>
+
+          <Input label="Nome" placeholder="Ex: Alimentação" value={name} onChangeText={setName} />
+
+          <Input
+            label="Ícone (emoji)"
+            placeholder="Ex: 🍔"
+            value={icon}
+            onChangeText={setIcon}
+            maxLength={4}
+          />
+
+          <View style={{ gap: theme.spacing.xs }}>
             <Text
               style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.fontFamily.rounded.bold,
-                fontSize: theme.fontSize.lg,
+                color: theme.colors.textSecondary,
+                fontFamily: theme.fontFamily.rounded.semibold,
+                fontSize: theme.fontSize.sm,
               }}
             >
-              {editingCategory ? 'Editar categoria' : 'Nova categoria'}
+              Cor
             </Text>
-
-            <Input label="Nome" placeholder="Ex: Alimentação" value={name} onChangeText={setName} />
-
-            <Input
-              label="Ícone (emoji)"
-              placeholder="Ex: 🍔"
-              value={icon}
-              onChangeText={setIcon}
-              maxLength={4}
-            />
-
-            <View style={{ gap: theme.spacing.xs }}>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.fontFamily.rounded.semibold,
-                  fontSize: theme.fontSize.sm,
-                }}
-              >
-                Cor
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-                {CATEGORY_COLORS.map((option) => (
-                  <Pressable
-                    key={option}
-                    onPress={() => setColor(option)}
-                    style={[
-                      styles.colorSwatch,
-                      {
-                        backgroundColor: option,
-                        borderRadius: theme.radius.full,
-                        borderWidth: color === option ? 3 : 0,
-                        borderColor: theme.colors.textPrimary,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              {CATEGORY_TYPES.map((option) => (
-                <Button
-                  key={option.value}
-                  label={option.label}
-                  variant={type === option.value ? 'primary' : 'outline'}
-                  onPress={() => setType(option.value)}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {CATEGORY_COLORS.map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setColor(option)}
+                  style={[
+                    styles.colorSwatch,
+                    {
+                      backgroundColor: option,
+                      borderRadius: theme.radius.full,
+                      borderWidth: color === option ? 3 : 0,
+                      borderColor: theme.colors.textPrimary,
+                    },
+                  ]}
                 />
               ))}
             </View>
+          </View>
 
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
-              <Button label="Salvar" variant="primary" onPress={handleSave} />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            {CATEGORY_TYPES.map((option) => (
+              <Button
+                key={option.value}
+                label={option.label}
+                variant={type === option.value ? 'primary' : 'outline'}
+                onPress={() => setType(option.value)}
+              />
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
+            <Button label="Salvar" variant="primary" onPress={handleSave} />
+          </View>
+        </Card>
+      </AppModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
   colorDot: {
     width: 40,
     height: 40,

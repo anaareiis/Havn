@@ -59,7 +59,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
           style={{
             color: theme.colors.textPrimary,
             fontFamily: theme.fontFamily.rounded.extrabold,
-            fontSize: theme.fontSize.xl,
+            fontSize: theme.fontSize.xxl,
             textAlign: 'center',
           }}
         >

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
 
-import { Badge, Button, Card, Input } from '../components';
+import { AppModal, Badge, Button, Card, Input } from '../components';
 import {
   type Account,
   type Category,
@@ -361,118 +361,114 @@ export default function TransactionsScreen() {
         }}
       />
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={{ gap: theme.spacing.md }}>
+      <AppModal visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <Card style={{ gap: theme.spacing.md }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fontFamily.rounded.bold,
+              fontSize: theme.fontSize.lg,
+            }}
+          >
+            {editingTransaction ? 'Editar transação' : 'Nova transação'}
+          </Text>
+
+          <Input
+            label="Valor"
+            placeholder="0,00"
+            keyboardType="numeric"
+            value={amountText}
+            onChangeText={setAmountText}
+            error={errors.amount}
+          />
+
+          <Input
+            label="Descrição"
+            placeholder="Ex: Mercado"
+            value={description}
+            onChangeText={setDescription}
+          />
+
+          <Input
+            label="Data"
+            placeholder="dd/mm/aaaa"
+            value={dateText}
+            onChangeText={setDateText}
+            error={errors.date}
+          />
+
+          <View style={{ gap: theme.spacing.xs }}>
             <Text
               style={{
-                color: theme.colors.textPrimary,
-                fontFamily: theme.fontFamily.rounded.bold,
-                fontSize: theme.fontSize.lg,
+                color: theme.colors.textSecondary,
+                fontFamily: theme.fontFamily.rounded.semibold,
+                fontSize: theme.fontSize.sm,
               }}
             >
-              {editingTransaction ? 'Editar transação' : 'Nova transação'}
+              Conta
             </Text>
-
-            <Input
-              label="Valor"
-              placeholder="0,00"
-              keyboardType="numeric"
-              value={amountText}
-              onChangeText={setAmountText}
-              error={errors.amount}
-            />
-
-            <Input
-              label="Descrição"
-              placeholder="Ex: Mercado"
-              value={description}
-              onChangeText={setDescription}
-            />
-
-            <Input
-              label="Data"
-              placeholder="dd/mm/aaaa"
-              value={dateText}
-              onChangeText={setDateText}
-              error={errors.date}
-            />
-
-            <View style={{ gap: theme.spacing.xs }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {accounts.map((account) => (
+                <Button
+                  key={account.id}
+                  label={account.name}
+                  variant={accountId === account.id ? 'primary' : 'outline'}
+                  onPress={() => setAccountId(account.id)}
+                />
+              ))}
+            </View>
+            {errors.account ? (
               <Text
                 style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.fontFamily.rounded.semibold,
-                  fontSize: theme.fontSize.sm,
+                  color: theme.colors.danger,
+                  fontFamily: theme.fontFamily.rounded.regular,
+                  fontSize: theme.fontSize.xs,
                 }}
               >
-                Conta
+                {errors.account}
               </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-                {accounts.map((account) => (
-                  <Button
-                    key={account.id}
-                    label={account.name}
-                    variant={accountId === account.id ? 'primary' : 'outline'}
-                    onPress={() => setAccountId(account.id)}
-                  />
-                ))}
-              </View>
-              {errors.account ? (
-                <Text style={{ color: theme.colors.danger, fontSize: theme.fontSize.xs }}>
-                  {errors.account}
-                </Text>
-              ) : null}
-            </View>
+            ) : null}
+          </View>
 
-            <View style={{ gap: theme.spacing.xs }}>
+          <View style={{ gap: theme.spacing.xs }}>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontFamily: theme.fontFamily.rounded.semibold,
+                fontSize: theme.fontSize.sm,
+              }}
+            >
+              Categoria
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {categories.map((category) => (
+                <Button
+                  key={category.id}
+                  label={`${category.icon ?? ''} ${category.name}`.trim()}
+                  variant={categoryId === category.id ? 'primary' : 'outline'}
+                  onPress={() => setCategoryId(category.id)}
+                />
+              ))}
+            </View>
+            {errors.category ? (
               <Text
                 style={{
-                  color: theme.colors.textSecondary,
-                  fontFamily: theme.fontFamily.rounded.semibold,
-                  fontSize: theme.fontSize.sm,
+                  color: theme.colors.danger,
+                  fontFamily: theme.fontFamily.rounded.regular,
+                  fontSize: theme.fontSize.xs,
                 }}
               >
-                Categoria
+                {errors.category}
               </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-                {categories.map((category) => (
-                  <Button
-                    key={category.id}
-                    label={`${category.icon ?? ''} ${category.name}`.trim()}
-                    variant={categoryId === category.id ? 'primary' : 'outline'}
-                    onPress={() => setCategoryId(category.id)}
-                  />
-                ))}
-              </View>
-              {errors.category ? (
-                <Text style={{ color: theme.colors.danger, fontSize: theme.fontSize.xs }}>
-                  {errors.category}
-                </Text>
-              ) : null}
-            </View>
+            ) : null}
+          </View>
 
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
-              <Button label="Salvar" variant="primary" onPress={handleSave} />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <Button label="Cancelar" variant="outline" onPress={() => setModalVisible(false)} />
+            <Button label="Salvar" variant="primary" onPress={handleSave} />
+          </View>
+        </Card>
+      </AppModal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-});
