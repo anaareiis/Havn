@@ -31,6 +31,9 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
   }, [onUnlock]);
 
   useEffect(() => {
+    // tryBiometrics is async; its setState calls happen after awaiting the
+    // biometrics APIs, not synchronously within this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     tryBiometrics();
   }, [tryBiometrics]);
 

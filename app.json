@@ -45,7 +45,8 @@
         {
           "faceIDPermission": "Permitir que o Havn use Face ID para desbloquear o app."
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }
